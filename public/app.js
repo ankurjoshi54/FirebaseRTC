@@ -37,8 +37,14 @@ async function createRoom() {
 
   registerPeerConnectionListeners();
 
-  localStream.getTracks().forEach(track => {
-    peerConnection.addTrack(track, localStream);
+  // localStream.getTracks().forEach(track => {
+  //   peerConnection.addTrack(track, localStream);
+  // });
+  peerConnection.addTransceiver('audio', {
+    direction: 'recvonly'
+  });
+  peerConnection.addTransceiver('video', {
+    direction: 'recvonly'
   });
 
   // Code for collecting ICE candidates below
@@ -145,13 +151,13 @@ async function joinRoomById(roomId) {
     });
     // Code for collecting ICE candidates above
 
-    peerConnection.addEventListener('track', event => {
-      console.log('Got remote track:', event.streams[0]);
-      event.streams[0].getTracks().forEach(track => {
-        console.log('Add a track to the remoteStream:', track);
-        remoteStream.addTrack(track);
-      });
-    });
+    // peerConnection.addEventListener('track', event => {
+    //   console.log('Got remote track:', event.streams[0]);
+    //   event.streams[0].getTracks().forEach(track => {
+    //     console.log('Add a track to the remoteStream:', track);
+    //     remoteStream.addTrack(track);
+    //   });
+    // });
 
     // Code for creating SDP answer below
     const offer = roomSnapshot.data().offer;
@@ -256,7 +262,13 @@ function registerPeerConnectionListeners() {
   peerConnection.addEventListener('iceconnectionstatechange ', () => {
     console.log(
         `ICE connection state change: ${peerConnection.iceConnectionState}`);
+    peerConnection.connectionState = peerConnection.iceConnectionState;
+    peerConnection.onconnectionstatechange();
   });
+
+  peerConnection.onconnectionstatechange = () => {
+    console.log('connection state change: ', peerConnection.connectionState);
+  }
 }
 
 init();
