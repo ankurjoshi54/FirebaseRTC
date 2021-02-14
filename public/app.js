@@ -19,14 +19,70 @@ let roomDialog = null;
 let roomId = null;
 
 function init() {
-  document.querySelector('#cameraBtn').addEventListener('click', openUserMedia);
   document.querySelector('#hangupBtn').addEventListener('click', hangUp);
   document.querySelector('#createBtn').addEventListener('click', createRoom);
   document.querySelector('#joinBtn').addEventListener('click', joinRoom);
+  document.querySelector('#audioBitrate').addEventListener('click', audioBitrate);
+  document.querySelector('#videoBitrate').addEventListener('click', videoBitrate);
   roomDialog = new mdc.dialog.MDCDialog(document.querySelector('#room-dialog'));
 }
 
+async function audioBitrate() {
+  console.log('Inside set audio bitrate')
+  let audioSender;
+  peerConnection.getSenders().forEach(sender => {
+    if (sender.track.kind === 'audio') {
+      audioSender = sender;
+    }
+  })
+  params = audioSender.getParameters();
+  if (!params.encodings) {
+    params.encodings = [{}]
+  }
+
+  let bitrate = parseInt(document.querySelector('#audio-bitrate-value').value)
+  console.log('Bitrate is: ', bitrate);
+  if (!isNaN(bitrate)) {
+    params.encodings[0].maxBitrate = bitrate;
+  } else {
+    params.encodings[0].maxBitrate = undefined;
+  }
+  audioSender.setParameters(params).then(() => {
+    document.querySelector('#errorBitrate').innerText = ``;
+  }).catch((err) => {
+    document.querySelector('#errorBitrate').innerText = `Error: ${err}`;
+  });
+}
+
+async function videoBitrate() {
+  console.log('Inside set video bitrate')
+  let videoSender;
+  peerConnection.getSenders().forEach(sender => {
+    if (sender.track.kind === 'video') {
+      videoSender = sender;
+    }
+  })
+  params = videoSender.getParameters();
+  if (!params.encodings) {
+    params.encodings = [{}]
+  }
+
+  let bitrate = parseInt(document.querySelector('#video-bitrate-value').value)
+  console.log('Bitrate is: ', bitrate);
+  if (!isNaN(bitrate)) {
+    params.encodings[0].maxBitrate = bitrate;
+  } else {
+    params.encodings[0].maxBitrate = undefined;
+  }
+  videoSender.setParameters(params).then(() => {
+    document.querySelector('#errorBitrate').innerText = ``;
+  }).catch((err) => {
+    document.querySelector('#errorBitrate').innerText = `Error: ${err}`;
+  });
+}
+
 async function createRoom() {
+  await openUserMedia();
   document.querySelector('#createBtn').disabled = true;
   document.querySelector('#joinBtn').disabled = true;
   const db = firebase.firestore();
@@ -91,20 +147,22 @@ async function createRoom() {
   });
   // Listening for remote session description above
 
-  // Listen for remote ICE candidates below
-  roomRef.collection('calleeCandidates').onSnapshot(snapshot => {
-    snapshot.docChanges().forEach(async change => {
-      if (change.type === 'added') {
-        let data = change.doc.data();
-        console.log(`Got new remote ICE candidate: ${JSON.stringify(data)}`);
-        await peerConnection.addIceCandidate(new RTCIceCandidate(data));
-      }
-    });
-  });
-  // Listen for remote ICE candidates above
+  // // Listen for remote ICE candidates below
+  // roomRef.collection('calleeCandidates').onSnapshot(snapshot => {
+  //   snapshot.docChanges().forEach(async change => {
+  //     if (change.type === 'added') {
+  //       let data = change.doc.data();
+  //       console.log(`Got new remote ICE candidate: ${JSON.stringify(data)}`);
+  //       await peerConnection.addIceCandidate(new RTCIceCandidate(data));
+  //     }
+  //   });
+  // });
+  // // Listen for remote ICE candidates above
 }
 
 function joinRoom() {
+  remoteStream = new MediaStream();
+  document.querySelector('#remoteVideo').srcObject = remoteStream;
   document.querySelector('#createBtn').disabled = true;
   document.querySelector('#joinBtn').disabled = true;
 
@@ -129,21 +187,21 @@ async function joinRoomById(roomId) {
     console.log('Create PeerConnection with configuration: ', configuration);
     peerConnection = new RTCPeerConnection(configuration);
     registerPeerConnectionListeners();
-    localStream.getTracks().forEach(track => {
-      peerConnection.addTrack(track, localStream);
-    });
+    // localStream.getTracks().forEach(track => {
+    //   peerConnection.addTrack(track, localStream);
+    // });
 
-    // Code for collecting ICE candidates below
-    const calleeCandidatesCollection = roomRef.collection('calleeCandidates');
-    peerConnection.addEventListener('icecandidate', event => {
-      if (!event.candidate) {
-        console.log('Got final candidate!');
-        return;
-      }
-      console.log('Got candidate: ', event.candidate);
-      calleeCandidatesCollection.add(event.candidate.toJSON());
-    });
-    // Code for collecting ICE candidates above
+    // // Code for collecting ICE candidates below
+    // const calleeCandidatesCollection = roomRef.collection('calleeCandidates');
+    // peerConnection.addEventListener('icecandidate', event => {
+    //   if (!event.candidate) {
+    //     console.log('Got final candidate!');
+    //     return;
+    //   }
+    //   console.log('Got candidate: ', event.candidate);
+    //   calleeCandidatesCollection.add(event.candidate.toJSON());
+    // });
+    // // Code for collecting ICE candidates above
 
     peerConnection.addEventListener('track', event => {
       console.log('Got remote track:', event.streams[0]);
@@ -184,7 +242,7 @@ async function joinRoomById(roomId) {
   }
 }
 
-async function openUserMedia(e) {
+async function openUserMedia() {
   const stream = await navigator.mediaDevices.getUserMedia(
       {video: true, audio: true});
   document.querySelector('#localVideo').srcObject = stream;
@@ -193,10 +251,6 @@ async function openUserMedia(e) {
   document.querySelector('#remoteVideo').srcObject = remoteStream;
 
   console.log('Stream:', document.querySelector('#localVideo').srcObject);
-  document.querySelector('#cameraBtn').disabled = true;
-  document.querySelector('#joinBtn').disabled = false;
-  document.querySelector('#createBtn').disabled = false;
-  document.querySelector('#hangupBtn').disabled = false;
 }
 
 async function hangUp(e) {
@@ -215,10 +269,8 @@ async function hangUp(e) {
 
   document.querySelector('#localVideo').srcObject = null;
   document.querySelector('#remoteVideo').srcObject = null;
-  document.querySelector('#cameraBtn').disabled = false;
-  document.querySelector('#joinBtn').disabled = true;
-  document.querySelector('#createBtn').disabled = true;
-  document.querySelector('#hangupBtn').disabled = true;
+  document.querySelector('#createBtn').disabled = false;
+  document.querySelector('#joinBtn').disabled = false;
   document.querySelector('#currentRoom').innerText = '';
 
   // Delete room on hangup
