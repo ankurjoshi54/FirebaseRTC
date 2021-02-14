@@ -13,6 +13,7 @@ const configuration = {
 };
 
 let peerConnection = null;
+let dataChannel = null;
 let localStream = null;
 let remoteStream = null;
 let roomDialog = null;
@@ -34,6 +35,13 @@ async function createRoom() {
 
   console.log('Create PeerConnection with configuration: ', configuration);
   peerConnection = new RTCPeerConnection(configuration);
+  dataChannel = peerConnection.createDataChannel('message');
+  dataChannel.onopen = function () {
+    console.log('DataChannel opened..........');
+  }
+  dataChannel.onmessage = function(event) {
+    console.log('Received message: ', event, event.data);
+  }
 
   registerPeerConnectionListeners();
 
@@ -128,6 +136,15 @@ async function joinRoomById(roomId) {
   if (roomSnapshot.exists) {
     console.log('Create PeerConnection with configuration: ', configuration);
     peerConnection = new RTCPeerConnection(configuration);
+    peerConnection.ondatachannel = function (event) {
+      dataChannel = event.channel;
+      dataChannel.onopen = function () {
+        console.log('DataChannel opened..........');
+      }
+      dataChannel.onmessage = function(event) {
+        console.log('Received message: ', event, event.data);
+      }
+    }
     registerPeerConnectionListeners();
     localStream.getTracks().forEach(track => {
       peerConnection.addTrack(track, localStream);
