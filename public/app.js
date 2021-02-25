@@ -27,14 +27,19 @@ function init() {
   roomDialog = new mdc.dialog.MDCDialog(document.querySelector('#room-dialog'));
 }
 
-async function audioBitrate() {
+async function audioBitrate(sender) {
   console.log('Inside set audio bitrate')
   let audioSender;
-  peerConnection.getSenders().forEach(sender => {
-    if (sender.track.kind === 'audio') {
-      audioSender = sender;
-    }
-  })
+  console.log(sender);
+  if (sender.track) {
+    audioSender = sender
+  } else {
+    peerConnection.getSenders().forEach(sender => {
+      if (sender.track.kind === 'audio') {
+        audioSender = sender;
+      }
+    })
+  }
   params = audioSender.getParameters();
   if (!params.encodings) {
     params.encodings = [{}]
@@ -47,21 +52,26 @@ async function audioBitrate() {
   } else {
     params.encodings[0].maxBitrate = undefined;
   }
-  audioSender.setParameters(params).then(() => {
-    document.querySelector('#errorBitrate').innerText = ``;
-  }).catch((err) => {
-    document.querySelector('#errorBitrate').innerText = `Error: ${err}`;
-  });
+  await audioSender.setParameters(params);
+  // audioSender.setParameters(params).then(() => {
+  //   document.querySelector('#errorAudioBitrate').innerText = ``;
+  // }).catch((err) => {
+  //   document.querySelector('#errorAudioBitrate').innerText = `Error audio: ${err}`;
+  // });
 }
 
-async function videoBitrate() {
+async function videoBitrate(sender) {
   console.log('Inside set video bitrate')
   let videoSender;
-  peerConnection.getSenders().forEach(sender => {
-    if (sender.track.kind === 'video') {
-      videoSender = sender;
-    }
-  })
+  if (sender.track) {
+    videoSender = sender
+  } else {
+    peerConnection.getSenders().forEach(sender => {
+      if (sender.track.kind === 'video') {
+        videoSender = sender;
+      }
+    })
+  }
   params = videoSender.getParameters();
   if (!params.encodings) {
     params.encodings = [{}]
@@ -74,11 +84,12 @@ async function videoBitrate() {
   } else {
     params.encodings[0].maxBitrate = undefined;
   }
-  videoSender.setParameters(params).then(() => {
-    document.querySelector('#errorBitrate').innerText = ``;
-  }).catch((err) => {
-    document.querySelector('#errorBitrate').innerText = `Error: ${err}`;
-  });
+  await videoSender.setParameters(params);
+  // videoSender.setParameters(params).then(() => {
+  //   document.querySelector('#errorVideoBitrate').innerText = ``;
+  // }).catch((err) => {
+  //   document.querySelector('#errorVideoBitrate').innerText = `Error video: ${err}`;
+  // });
 }
 
 async function createRoom() {
@@ -113,6 +124,16 @@ async function createRoom() {
   // Code for creating a room below
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
+  let audioSender, videoSender;
+  peerConnection.getSenders().forEach(sender => {
+    if (sender.track.kind === 'video') {
+      videoSender = sender
+    } else if (sender.track.kind === 'audio') {
+      audioSender = sender
+    }
+  })
+  await audioBitrate(audioSender);
+  await videoBitrate(videoSender);
   console.log('Created offer:', offer);
 
   const roomWithOffer = {
@@ -241,6 +262,40 @@ async function joinRoomById(roomId) {
     // Listening for remote ICE candidates above
   }
 }
+
+async function setMediaBitrate(sdp, media, bitrate) {
+    const lines = sdp.split('\n');
+    let line = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf(`m=${media}`) === 0) {
+        line = i;
+        break;
+      }
+    }
+    if (line === -1) {
+      return sdp;
+    }
+
+    // Pass the m line
+    line++;
+
+    // Skip i and c lines
+    while (lines[line].indexOf('i=') === 0 || lines[line].indexOf('c=') === 0) {
+      line++;
+    }
+
+    // If we're on a b line, replace it
+    if (lines[line].indexOf('b') === 0) {
+      lines[line] = 'b=AS:' + bitrate;
+      return lines.join('\n');
+    }
+
+    // Add a new b line
+    let newLines = lines.slice(0, line);
+    newLines.push('b=AS:' + bitrate);
+    newLines = newLines.concat(lines.slice(line, lines.length));
+    return newLines.join('\n');
+  }
 
 async function openUserMedia() {
   const stream = await navigator.mediaDevices.getUserMedia(
